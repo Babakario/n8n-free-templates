@@ -1,6 +1,6 @@
 # Script Dialogue Analyzer — راهنمای استفاده
 
-این فایل راهنمای راه‌اندازی و نمونهٔ استفاده برای گردش‌کار n8n به نام "Script Dialogue Analyzer" است. این راهنما به زبان فارسی شامل نمونهٔ درخواست POST، توضیح پارامترها، و مراحل راه‌اندازی credentialها و Pinecone/Google Sheets می‌باشد.
+این فایل راهنمای راه‌اندازی و نمونهٔ استفاده برای گردش‌کار n8n به نام "Script Dialogue Analyzer" است. این راهنما به زبان فارسی شامل نمونهٔ درخواست POST، توضیح پارامترها، مراحل راه‌اندازی credentialها و Pinecone/Google Sheets، مثال‌های بیشتر برای payload و راهنمای اضافه کردن اسکرین‌شات است.
 
 ## خلاصه
 این workflow متن اسکریپت یا دیالوگ را دریافت می‌کند، آن را به قطعات تقسیم می‌کند، برای هر قطعه embedding تولید کرده و در Pinecone ایندکس می‌کند. سپس با استفاده از جستجوی برداری و یک عامل (agent) همراه با حافظه و مدل زبانی، پاسخ‌ها و تحلیل‌های مبتنی بر متن تولید می‌کند و لاگ‌ها را در Google Sheets ذخیره می‌کند.
@@ -9,7 +9,9 @@
 Media/script_dialogue_analyzer.json
 
 ## نمونهٔ درخواست POST (cURL)
-فرض می‌کنیم n8n روی https://your-n8n-host تنظیم شده و webhook مسیر `script_dialogue_analyzer` دارد:
+فرض می‌کنیم n8n روی https://your-n8n-host تنظیم شده و webhook مسیر `script_dialogue_analyzer` دارد.
+
+- JSON ساده (همان‌طور که قبلاً نشان داده شد):
 
 curl -X POST "https://your-n8n-host/webhook/script_dialogue_analyzer" \
   -H "Content-Type: application/json" \
@@ -20,44 +22,102 @@ curl -X POST "https://your-n8n-host/webhook/script_dialogue_analyzer" \
     "meta": { "source": "draft", "language": "fa" }
   }'
 
-توضیحات فیلدها:
-- `text`: متن کامل اسکریپت/دیالوگ — مهم‌ترین فیلد.
-- `title`، `author`، `meta`: دلخواه؛ برای لاگ و متادیتا مناسب‌اند.
+- ارسال فایل متنی با multipart/form-data (مثلاً اگر می‌خواهید فایل .txt آپلود کنید):
 
-> توجه: بسته به کانفیگ webhook شما، ممکن است نیاز باشد فیلدها یا ساختار JSON را تغییر دهید. این مثال عمومی است.
+curl -X POST "https://your-n8n-host/webhook/script_dialogue_analyzer" \
+  -F "file=@./my_script.txt" \
+  -F "title=اسکریپت صحنه 1" \
+  -F "meta={\"language\":\"fa\"}" \
+  -H "Accept: application/json"
 
-## مراحل راه‌اندازی
-1. وارد n8n شوید و فایل JSON `Media/script_dialogue_analyzer.json` را Import کنید (Import > Workflow > Upload file).
-2. اعتبارنامه‌ها (Credentials) را بسازید یا مقداردهی کنید:
-   - HuggingFace: توکن API (نام credential در workflow: "HuggingFace" / HF_API)
-   - Pinecone: API key و environment (نام credential: "Pinecone account" / PINECONE_API)
-   - OpenAI: API key (نام credential: "OpenAI" / OPENAI_API)
-   - Google Sheets (OAuth2): credential برای نوشتن در شیت (نام credential: "Sheets" / SHEETS_API)
+توجه: برای استفاده از آپلود فایل باید node Webhook را طوری پیکربندی کنید که فایل‌ها را بپذیرد و سپس در workflow از nodeهایی برای خواندن محتوای فایل استفاده شود (مثلاً Read Binary File یا تبدیل باینری به متن).
 
-3. در Pinecone یک index بسازید با نام `script_dialogue_analyzer` (یا نام دلخواه و سپس همان نام را در nodeهای Insert و Query در workflow بروز کنید). دقت کنید dim (ابعاد) با مدل embedding شما هم‌خوانی داشته باشد.
-4. مقداردهی `SHEET_ID` در node Google Sheets: شناسهٔ Spreadsheet خود را در فیلد `documentId` قرار دهید و مطمئن شوید شیتی با نام "Log" وجود دارد یا نام را مطابق شیت‌تان تغییر دهید.
-5. پارامترهای مهم را بررسی و در صورت نیاز تنظیم کنید:
-   - Splitter: `chunkSize = 400`, `chunkOverlap = 40` (قابل تغییر)
-   - Embeddings: مدل = "default" (می‌توانید مدل HuggingFace مشخص‌تری انتخاب کنید)
-   - Agent: `text = {{ $json }}` یعنی کل JSON دریافتی به عامل فرستاده می‌شود
-6. Workflow را فعال (Activate) کنید.
-7. با استفاده از مثال cURL یا از ابزار HTTP دیگر یک POST به webhook ارسال کنید.
+- مثال با Python (requests):
 
-## بررسی و رفع اشکال
-- اگر بردارها در Pinecone ثبت نمی‌شوند: مطمئن شوید ایندکس موجود است و credential Pinecone صحیح است.
-- خطای احراز هویت (401/403): کلیدها و نام credentialها را چک کنید.
-- اگر لاگ‌ها در Google Sheets ظاهر نمی‌شوند: بررسی کنید `SHEET_ID` درست باشد و credential گوگل دسترسی نوشتن داشته باشد.
-- برای خطاهای دقیق، در n8n به Execution log بروید و روی اجرای مربوطه کلیک کنید تا خروجی هر node و پیغام خطا را ببینید.
+```python
+import requests
+url = "https://your-n8n-host/webhook/script_dialogue_analyzer"
+payload = {
+    "title": "نمونه اسکریپت از پایتون",
+    "author": "Tester",
+    "text": "دیالوگ A: سلام. دیالوگ B: خوبی؟"
+}
+resp = requests.post(url, json=payload)
+print(resp.status_code, resp.text)
+```
 
-## پیشنهادات توسعه
-- اضافه کردن endpoint تأیید (GET webhook) تا وضعیت سلامت workflow را بررسی کنید.
-- اضافه کردن مرحلهٔ preprocessing برای حذف نویز و قالب‌بندی بهتر دیالوگ‌ها (مثلاً جدا کردن نام شخصیت‌ها).
-- ذخیرهٔ متادیتا (title, author, scene) همراه بردارها برای فیلترهای پیچیده‌تر هنگام بازیابی.
+## نمونهٔ پاسخ webhook
+بستگی به این دارد که در workflow خروجی‌ای تنظیم شده باشد یا خیر. یک پاسخ پیشنهادی که می‌توانید در node آخر قرار دهید:
+
+HTTP 200 OK
+{
+  "status": "ok",
+  "indexed_chunks": 12,
+  "message": "Text received and indexed successfully.",
+  "workflowRunId": "<n8n-execution-id>"
+}
+
+اگر می‌خواهید بلافاصله پس از POST اطلاعاتی مثل تعداد chunk‌های وارد شده یا شناسهٔ اجرا را دریافت کنید، باید یک node HTTP Response یا Set + Respond در انتهای جریان اضافه کنید.
+
+## فیلدهای پیشنهادی برای payload و لاگ
+برای راحتی آنالیز و فیلترینگ در آینده، پیشنهاد می‌کنم این ستون‌ها را در Google Sheets لاگ کنید:
+- timestamp (زمان درخواست)
+- title
+- author
+- language
+- source (مثلاً draft, final, upload)
+- indexed_chunks (تعداد chunkهای اندکس‌شده)
+- query (اگر از RAG برای سوال/پاسخ استفاده شده)
+- response_summary (خلاصهٔ خروجی عامل)
+- matched_chunk_ids (شناسهٔ قطعاتی که هنگام بازیابی همسان شده‌اند)
+
+نمونهٔ سطر (CSV-like):
+2026-06-25T12:34:56Z, "نمونه اسکریپت", "مثال", "fa", "draft", 12, "آیا شخصیت A تهدیدآمیز است؟", "پاسخ...", "c1,c5,c11"
+
+## اسکرین‌شات: کجا و چگونه بگیرید
+من نمی‌توانم تصاویر را از محیط شما بگیرم، ولی راهنما برای اضافه کردن اسکرین‌شات در repo و نکات گرفتن اسکرین‌شات:
+
+مکان‌های مفید برای اسکرین‌شات:
+- صفحه اصلی workflow در n8n (نمای کلی canvas) — نام workflow و چینش nodeها
+- تنظیمات node Webhook (نمای path و روش HTTP)
+- Execution details در n8n برای یک اجرا (نمای خروجی هر node و لاگ‌ها)
+- Pinecone console: نمای index و تعداد vectorهای موجود
+- Google Sheets: نمای جدول لاگ (ستون‌ها و نمونهٔ ردیف‌های وارد شده)
+
+نام‌گذاری پیشنهادی فایل‌ها و مسیر ذخیره در repo:
+- Media/screenshots/script_dialogue_canvas.png
+- Media/screenshots/webhook_settings.png
+- Media/screenshots/execution_detail.png
+- Media/screenshots/pinecone_index.png
+- Media/screenshots/google_sheets_log.png
+
+نکات فنی برای اسکرین‌شات:
+- در n8n از حالت Fullscreen canvas استفاده کنید تا همهٔ nodeها در یک تصویر دیده شوند.
+- برای Execution details، روی یک اجرا کلیک کرده و بخش هر node را باز کنید تا خروجی مربوطه قابل مشاهده باشد.
+- قبل از گرفتن اسکرین‌شات کلیدها/توکن‌ها را مخفی کنید یا صفحه را طوری ببرید که مقادیر حساس نشان داده نشوند.
+
+اگر شما تصاویر را آپلود کنید (فایل‌های PNG/JPEG)، من می‌توانم آن‌ها را در مسیرهای بالا در مخزن اضافه و commit کنم.
+
+## گام‌های راه‌اندازی (خلاصه)
+1. Import فایل JSON: Media/script_dialogue_analyzer.json
+2. تنظیم credentialها: HuggingFace، Pinecone، OpenAI، Google Sheets
+3. ساخت ایندکس Pinecone با نام `script_dialogue_analyzer` (یا بروز کردن نام در nodeها)
+4. وارد کردن `SHEET_ID` و اطمینان از وجود شیت "Log"
+5. بررسی پارامترها: chunkSize، chunkOverlap، مدل امبدینگ
+6. Activate و ارسال POST تست
+
+## رفع اشکال سریع
+- اگر فایل آپلود می‌کنید و متن خوانده نشد: اطمینان حاصل کنید در n8n node مربوط به خواندن باینری (Binary to Text) اضافه شده است.
+- خطاهای Pinecone: بعد از ساخت ایندکس، تست کنید با SDK یا کنسول Pinecone که ایندکس خالی یا حاوی بردارهاست.
+- برای خطاهای OpenAI/HuggingFace: محدودیت نرخ یا خطاهای ابعادی (dimension) امبدینگ را بررسی کنید.
+
+## پیشنهادی برای توسعه‌های بعدی
+- افزودن endpoint GET برای سلامت (health) یا وضعیت ایندکس
+- وارد کردن متادیتای دقیق‌تر مانند scene_number, character_list
+- اضافه کردن یک UI ساده (نشان دادن نتایج جستجوی معنایی)
 
 ---
-فایل راهنما در مسیر `Media/script_dialogue_analyzer_README.md` در مخزن شما اضافه شد.
 
-اگر می‌خواهید من:
-- این فایل را در یک شاخه جدید قرار دهم و pull request ایجاد کنم، یا
-- مستقیماً یک commit به شاخهٔ پیش‌فرض بزنم
-را انجام دهم، بگویید کدام گزینه را ترجیح می‌دهید تا بر اساس آن اقدام کنم.
+فایل راهنما در مسیر `Media/script_dialogue_analyzer_README.md` به‌روز شد و مثال‌های بیشتر payload و راهنمای اسکرین‌شات اضافه شد.
+
+اگر می‌خواهید من تصاویر را هم اضافه کنم یا این تغییر را در یک شاخهٔ جدید قرار دهم و برای آن Pull Request باز کنم، بگویید کدام گزینه را می‌خواهید تا انجام دهم.
